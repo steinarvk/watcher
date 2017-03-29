@@ -1,0 +1,12 @@
+watch:
+  - name: acpi
+    run:
+      program:
+        binary: acpi
+        args: ["-V"]
+    scheduling:
+      every: 1m
+    analyse:
+      - name: temperature
+        run:
+          shell: "grep \"^Thermal 0:\" | head -1 | sed \"s/.*ok, //\" | sed \"s/[^0-9.].*//g\""
