@@ -10,6 +10,7 @@ import (
 
 	"github.com/steinarvk/watcher/config"
 	"github.com/steinarvk/watcher/runner"
+
 	yaml "gopkg.in/yaml.v2"
 )
 
