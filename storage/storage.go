@@ -17,7 +17,7 @@ func toUTCMillis(t time.Time) int64 {
 }
 
 func (d *DB) InsertExecution(path string, result *runner.Result, info *hostinfo.HostInfo) error {
-	return d.DB.QueryRow(`
+	_, err := d.DB.Exec(`
 		INSERT INTO program_executions
 			(node_path,
 		   executor_host, executor_pid,
@@ -36,5 +36,6 @@ func (d *DB) InsertExecution(path string, result *runner.Result, info *hostinfo.
 		toUTCMillis(result.Start), toUTCMillis(result.Stop),
 		result.Success,
 		result.Stdout, result.Stderr,
-	).Scan()
+	)
+	return err
 }
