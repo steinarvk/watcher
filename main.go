@@ -24,6 +24,7 @@ import (
 var (
 	configFilename    = flag.String("config", "", "config YAML file")
 	dbSecretsFilename = flag.String("db_secrets", "", "database secrets YAML file")
+	verboseLogging    = flag.Bool("verbose", false, "verbose logging")
 )
 
 func loadConfig(filename string) (*config.Config, error) {
@@ -74,6 +75,10 @@ func connectDB(secretsFilename string) (*storage.DB, error) {
 }
 
 func mainCore() error {
+	if *verboseLogging {
+		storage.Verbose = true
+	}
+
 	if *configFilename == "" {
 		return errors.New("missing required flag: --config")
 	}
@@ -97,6 +102,15 @@ func mainCore() error {
 		return fmt.Errorf("error getting hostinfo: %v", err)
 	}
 
+	go func() {
+		for {
+			if err := db.CleanLeases(time.Now()); err != nil {
+				log.Fatalf("error: CleanLeases() = %v", err)
+			}
+			time.Sleep(10 * time.Second)
+		}
+	}()
+
 	for _, watch := range cfg.Watch {
 		watch := watch
 
@@ -114,22 +128,49 @@ func mainCore() error {
 
 		go func() {
 			for {
-				next := scheduleSpec.ScheduleNext(time.Now())
-
-				log.Printf("%q scheduled for %v", watch.Name, next)
-
-				scheduler.WaitUntil(next)
-
-				log.Printf("running %q", watch.Name)
-
-				result, err := runner.Run(runSpec, runner.WithTimeout(timeout))
+				next, got, err := db.NextScheduledSpecificEvent(watch.Name)
 				if err != nil {
-					log.Printf("error: running %q: %v", watch.Name, err)
+					log.Fatal(err)
+				}
+				if !got {
+					err := db.WithLease("schedule:"+watch.Name, time.Second, func() error {
+						next = scheduleSpec.ScheduleNext(time.Now())
+						log.Printf("scheduling %q for %v", watch.Name, next)
+						return db.ScheduleEvent(watch.Name, next)
+					})
+					if err != nil {
+						log.Fatal(err)
+					}
+				}
+
+				if next.IsZero() {
+					log.Printf("no time scheduled for %q", watch.Name)
+					time.Sleep(time.Second)
 					continue
 				}
 
-				if err := db.InsertExecution(watch.Name, result, info); err != nil {
-					log.Printf("error: storing result of %q: %v", watch.Name, err)
+				log.Printf("%q scheduled for %v", watch.Name, next)
+				scheduler.WaitUntil(next)
+
+				err = db.WithLease("execute:"+watch.Name, timeout+time.Second, func() error {
+					if err := db.Unschedule(watch.Name); err != nil {
+						return err
+					}
+
+					log.Printf("running %q", watch.Name)
+					result, err := runner.Run(runSpec, runner.WithTimeout(timeout))
+					if err != nil {
+						return err
+					}
+
+					if err := db.InsertExecution(watch.Name, result, info); err != nil {
+						return err
+					}
+
+					return nil
+				})
+				if err != nil {
+					log.Fatal(err)
 				}
 			}
 		}()

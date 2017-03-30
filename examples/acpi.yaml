@@ -17,3 +17,8 @@ watch:
       random:
         min: 10s
         max: 120s
+  - name: date
+    run:
+      shell: "date +%s"
+    schedule:
+      period: 5s

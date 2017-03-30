@@ -36,6 +36,9 @@ func checkNodeName(s string) error {
 	if strings.Contains(s, "/") {
 		return fmt.Errorf("invalid name %q: cannot contain '/'", s)
 	}
+	if strings.Contains(s, ":") {
+		return fmt.Errorf("invalid name %q: cannot contain ':'", s)
+	}
 	initial, _ := utf8.DecodeRuneInString(s)
 	if strings.ContainsRune("0123456789_", initial) {
 		return fmt.Errorf("invalid name %q: first character cannot be %v", initial)
