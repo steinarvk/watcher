@@ -3,6 +3,8 @@ package config
 import (
 	"errors"
 	"fmt"
+	"strings"
+	"unicode/utf8"
 
 	"github.com/steinarvk/watcher/runner"
 )
@@ -26,17 +28,36 @@ type AnalysisSpec struct {
 	Children []*AnalysisSpec `yaml:"analyse"`
 }
 
-func (c *AnalysisSpec) Check() error {
-	if c.Name == "" {
+func checkNodeName(s string) error {
+	if s == "" {
 		return errors.New("missing 'name'")
+	}
+	if strings.Contains(s, "/") {
+		return fmt.Errorf("invalid name %q: cannot contain '/'", s)
+	}
+	initial, _ := utf8.DecodeRuneInString(s)
+	if strings.ContainsRune("0123456789_", initial) {
+		return fmt.Errorf("invalid name %q: first character cannot be %v", initial)
+	}
+	return nil
+}
+
+func (c *AnalysisSpec) Check() error {
+	if err := checkNodeName(c.Name); err != nil {
+		return err
 	}
 	if c.Run == nil {
 		return errors.New("missing 'run'")
 	}
+	seen := map[string]bool{}
 	for i, child := range c.Children {
+		if seen[child.Name] {
+			return fmt.Errorf("child %q occurs twice", child.Name)
+		}
 		if err := child.Check(); err != nil {
 			return fmt.Errorf("in analysis %d (%q): %v", i, child.Name, err)
 		}
+		seen[child.Name] = true
 	}
 	return nil
 }
@@ -50,8 +71,8 @@ type WatchSpec struct {
 }
 
 func (c *WatchSpec) Check() error {
-	if c.Name == "" {
-		return errors.New("missing 'name'")
+	if err := checkNodeName(c.Name); err != nil {
+		return err
 	}
 	if c.Run == nil {
 		return errors.New("missing 'run'")
@@ -59,10 +80,15 @@ func (c *WatchSpec) Check() error {
 	if err := c.Run.Check(); err != nil {
 		return fmt.Errorf("in run section: %v", err)
 	}
+	seen := map[string]bool{}
 	for i, child := range c.Children {
+		if seen[child.Name] {
+			return fmt.Errorf("child %q occurs twice", child.Name)
+		}
 		if err := child.Check(); err != nil {
 			return fmt.Errorf("in analysis %d (%q): %v", i, child.Name, err)
 		}
+		seen[child.Name] = true
 	}
 	return nil
 }
