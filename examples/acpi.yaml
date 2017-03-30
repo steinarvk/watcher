@@ -22,3 +22,10 @@ watch:
       shell: "date +%s"
     schedule:
       period: 5s
+  - name: sleep5s
+    run:
+      shell: "sleep 5s"
+      timeout: 2s
+    schedule:
+      period: 10s
+

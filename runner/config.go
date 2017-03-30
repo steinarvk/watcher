@@ -3,6 +3,11 @@ package runner
 import (
 	"errors"
 	"fmt"
+	"time"
+)
+
+var (
+	DefaultTimeout = 5 * time.Second
 )
 
 type ProgramSpec struct {
@@ -16,6 +21,15 @@ func (p *ProgramSpec) Args() []string  { return p.Arguments }
 type Config struct {
 	Shell   string       `yaml:"shell"`
 	Program *ProgramSpec `yaml:"program"`
+
+	Timeout string `yaml:"timeout"`
+}
+
+func (c *Config) GetTimeout() (time.Duration, error) {
+	if c.Timeout == "" {
+		return DefaultTimeout, nil
+	}
+	return time.ParseDuration(c.Timeout)
 }
 
 func countTrue(xs ...bool) int {
