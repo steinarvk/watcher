@@ -7,6 +7,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/steinarvk/watcher/runner"
+	"github.com/steinarvk/watcher/scheduler"
 )
 
 type Config struct {
@@ -63,11 +64,10 @@ func (c *AnalysisSpec) Check() error {
 }
 
 type WatchSpec struct {
-	Name     string          `yaml:"name"`
-	Run      *runner.Config  `yaml:"run"`
-	Children []*AnalysisSpec `yaml:"analyse"`
-
-	// Schedule *scheduler.Config `yaml:"schedule"`
+	Name     string            `yaml:"name"`
+	Run      *runner.Config    `yaml:"run"`
+	Schedule *scheduler.Config `yaml:"schedule"`
+	Children []*AnalysisSpec   `yaml:"analyse"`
 }
 
 func (c *WatchSpec) Check() error {
@@ -79,6 +79,12 @@ func (c *WatchSpec) Check() error {
 	}
 	if err := c.Run.Check(); err != nil {
 		return fmt.Errorf("in run section: %v", err)
+	}
+	if c.Schedule == nil {
+		return errors.New("missing 'schedule'")
+	}
+	if err := c.Schedule.Check(); err != nil {
+		return fmt.Errorf("in schedule section: %v", err)
 	}
 	seen := map[string]bool{}
 	for i, child := range c.Children {

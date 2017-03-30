@@ -4,9 +4,16 @@ watch:
       program:
         binary: acpi
         args: ["-V"]
-    scheduling:
-      every: 1m
+    schedule:
+      period: 1m
     analyse:
       - name: temperature
         run:
           shell: "grep \"^Thermal 0:\" | head -1 | sed \"s/.*ok, //\" | sed \"s/[^0-9.].*//g\""
+  - name: df
+    run:
+      shell: "df"
+    schedule:
+      random:
+        min: 10s
+        max: 120s

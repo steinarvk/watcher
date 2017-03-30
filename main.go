@@ -12,6 +12,7 @@ import (
 	"github.com/steinarvk/watcher/config"
 	"github.com/steinarvk/watcher/hostinfo"
 	"github.com/steinarvk/watcher/runner"
+	"github.com/steinarvk/watcher/scheduler"
 	"github.com/steinarvk/watcher/secrets"
 	"github.com/steinarvk/watcher/storage"
 
@@ -97,23 +98,46 @@ func mainCore() error {
 	}
 
 	for _, watch := range cfg.Watch {
-		fmt.Println("executing", watch.Name)
-		spec, err := watch.Run.ToSpec()
+		watch := watch
+
+		runSpec, err := watch.Run.ToSpec()
 		if err != nil {
 			return err
 		}
 
-		result, err := runner.Run(spec, runner.WithTimeout(5*time.Second))
+		scheduleSpec, err := watch.Schedule.ToSpec()
 		if err != nil {
-			fmt.Println("error", err)
-		} else {
-			if err := db.InsertExecution(watch.Name, result, info); err != nil {
-				return err
-			}
+			return err
 		}
+
+		timeout := 5 * time.Second
+
+		go func() {
+			for {
+				next := scheduleSpec.ScheduleNext(time.Now())
+
+				log.Printf("%q scheduled for %v", watch.Name, next)
+
+				scheduler.WaitUntil(next)
+
+				log.Printf("running %q", watch.Name)
+
+				result, err := runner.Run(runSpec, runner.WithTimeout(timeout))
+				if err != nil {
+					log.Printf("error: running %q: %v", watch.Name, err)
+					continue
+				}
+
+				if err := db.InsertExecution(watch.Name, result, info); err != nil {
+					log.Printf("error: storing result of %q: %v", watch.Name, err)
+				}
+			}
+		}()
 	}
 
-	return nil
+	for {
+		time.Sleep(time.Hour)
+	}
 }
 
 func main() {
