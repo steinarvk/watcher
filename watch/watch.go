@@ -1,4 +1,4 @@
-package main
+package watch
 
 import (
 	"fmt"
@@ -91,7 +91,7 @@ const (
 	timeoutSlack = time.Second
 )
 
-func watcher(db *storage.DB, watch *config.WatchSpec) error {
+func Watch(db *storage.DB, watch *config.WatchSpec) error {
 	log.Printf("starting watcher for node %q", watch.Name)
 
 	info, err := hostinfo.Get()

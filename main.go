@@ -15,6 +15,7 @@ import (
 	"github.com/steinarvk/watcher/config"
 	"github.com/steinarvk/watcher/secrets"
 	"github.com/steinarvk/watcher/storage"
+	"github.com/steinarvk/watcher/watch"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
@@ -139,13 +140,13 @@ func mainCore() error {
 		}
 	}()
 
-	for _, watch := range cfg.Watch {
-		go func(watch *config.WatchSpec) {
-			err := watcher(db, watch)
+	for _, w := range cfg.Watch {
+		go func(w *config.WatchSpec) {
+			err := watch.Watch(db, w)
 			if err != nil {
 				log.Fatal(err)
 			}
-		}(watch)
+		}(w)
 	}
 
 	http.Handle("/metrics", promhttp.Handler())
