@@ -7,6 +7,9 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"net"
+	"net/http"
+	"os"
 	"time"
 
 	"github.com/steinarvk/watcher/config"
@@ -16,16 +19,43 @@ import (
 	"github.com/steinarvk/watcher/secrets"
 	"github.com/steinarvk/watcher/storage"
 
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+
 	_ "github.com/lib/pq"
 
 	yaml "gopkg.in/yaml.v2"
 )
 
 var (
+	DefaultPort = 5365
+)
+
+var (
 	configFilename    = flag.String("config", "", "config YAML file")
 	dbSecretsFilename = flag.String("db_secrets", "", "database secrets YAML file")
 	verboseLogging    = flag.Bool("verbose", false, "verbose logging")
+	listenAll         = flag.Bool("listen_all", false, "listen on all network interfaces, not only localhost")
+	port              = flag.Int("port", 0, "port on which to listen")
 )
+
+func beginListening() (net.Listener, error) {
+	host := "127.0.0.1"
+	if *listenAll {
+		host = ""
+	}
+
+	if *port != 0 {
+		return net.Listen("tcp", fmt.Sprintf("%s:%d", host, *port))
+	}
+
+	// Attempt the preferred port first.
+	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", host, DefaultPort))
+	if err == nil {
+		return listener, nil
+	}
+
+	return net.Listen("tcp", fmt.Sprintf("%s:%d", host, 0))
+}
 
 func loadConfig(filename string) (*config.Config, error) {
 	data, err := ioutil.ReadFile(filename)
@@ -86,6 +116,12 @@ func mainCore() error {
 	if *dbSecretsFilename == "" {
 		return errors.New("missing required flag: --db_secrets")
 	}
+
+	listener, err := beginListening()
+	if err != nil {
+		return err
+	}
+	log.Printf("listening on: %s", listener.Addr())
 
 	db, err := connectDB(*dbSecretsFilename)
 	if err != nil {
@@ -176,13 +212,17 @@ func mainCore() error {
 		}()
 	}
 
-	for {
-		time.Sleep(time.Hour)
-	}
+	http.Handle("/metrics", promhttp.Handler())
+
+	// Listen forever, unless something goes wrong.
+	return http.Serve(listener, nil)
 }
 
 func main() {
 	flag.Parse()
+
+	os.Unsetenv("PGPASSFILE")
+
 	if err := mainCore(); err != nil {
 		log.Fatalf("fatal: %v", err)
 	}
