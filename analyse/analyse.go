@@ -14,6 +14,15 @@ var (
 )
 
 var (
+	metricAnalysersStarted = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "watcher",
+			Name:      "analysers_started",
+			Help:      "Analysers that have been started",
+		},
+		[]string{"analyser"},
+	)
+
 	metricNodeStoredHintsReceived = prometheus.NewCounter(
 		prometheus.CounterOpts{
 			Namespace: "watcher",
@@ -24,11 +33,14 @@ var (
 )
 
 func init() {
+	prometheus.MustRegister(metricAnalysersStarted)
 	prometheus.MustRegister(metricNodeStoredHintsReceived)
 }
 
 func Analyse(parentPath, path string, spec *config.AnalysisSpec, notify <-chan struct{}, nodesStored chan<- string) error {
 	log.Printf("starting analyser for node %q", path)
+
+	metricAnalysersStarted.WithLabelValues(path).Inc()
 
 	checkScheduler := scheduler.UniformRandom{
 		time.Minute,

@@ -18,6 +18,15 @@ import (
 var (
 	Verbose = false
 
+	metricWatchersStarted = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "watcher",
+			Name:      "watchers_started",
+			Help:      "Watchers that have been started",
+		},
+		[]string{"watcher"},
+	)
+
 	metricWatchRuns = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: "watcher",
@@ -50,6 +59,7 @@ func init() {
 	prometheus.MustRegister(metricWatchRuns)
 	prometheus.MustRegister(metricWatchRunsFinished)
 	prometheus.MustRegister(metricWatchRunLatency)
+	prometheus.MustRegister(metricWatchersStarted)
 }
 
 type cmdTracker struct {
@@ -93,6 +103,8 @@ const (
 
 func Watch(db *storage.DB, watch *config.WatchSpec, nodesStored chan<- string) error {
 	log.Printf("starting watcher for node %q", watch.Name)
+
+	metricWatchersStarted.WithLabelValues(watch.Name).Inc()
 
 	info, err := hostinfo.Get()
 	if err != nil {
