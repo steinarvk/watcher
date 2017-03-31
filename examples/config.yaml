@@ -28,4 +28,16 @@ watch:
       timeout: 2s
     schedule:
       period: 10s
-
+  - name: mefi
+    run:
+      program:
+        binary: "./examples/scripts/scrape.py"
+        args: ["http://www.metafilter.com"]
+      timeout: 30s
+    schedule:
+      period: 10m
+    analyse:
+      - name: comment_counts
+        run:
+          program:
+            binary: "./examples/scripts/mefi_comment_count.py"
