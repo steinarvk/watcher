@@ -91,7 +91,7 @@ const (
 	timeoutSlack = time.Second
 )
 
-func Watch(db *storage.DB, watch *config.WatchSpec) error {
+func Watch(db *storage.DB, watch *config.WatchSpec, nodesStored chan<- string) error {
 	log.Printf("starting watcher for node %q", watch.Name)
 
 	info, err := hostinfo.Get()
@@ -173,6 +173,7 @@ func Watch(db *storage.DB, watch *config.WatchSpec) error {
 			if err := db.InsertExecution(watch.Name, result, info); err != nil {
 				return err
 			}
+			nodesStored <- watch.Name
 
 			return nil
 		})

@@ -41,12 +41,22 @@ var (
 		},
 		[]string{"query", "status"},
 	)
+
+	metricExecutionDataBytes = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "watcher",
+			Name:      "execution_data_inserted",
+			Help:      "Bytes of execution data inserted into database",
+		},
+		[]string{"stream"},
+	)
 )
 
 func init() {
 	prometheus.MustRegister(metricQueries)
 	prometheus.MustRegister(metricQueriesFinished)
 	prometheus.MustRegister(metricQueryLatency)
+	prometheus.MustRegister(metricExecutionDataBytes)
 }
 
 type queryTracker struct {
@@ -69,7 +79,9 @@ func (q *queryTracker) Finish(err error) error {
 	status := "ok"
 	if err != nil {
 		status = "error"
-		if castErr, ok := err.(*pq.Error); ok {
+		if err == sql.ErrNoRows {
+			status = "ErrNoRows"
+		} else if castErr, ok := err.(*pq.Error); ok {
 			status = castErr.Code.Name()
 		}
 	}
@@ -125,6 +137,10 @@ func (d *DB) InsertExecution(path string, result *runner.Result, info *hostinfo.
 		result.Success,
 		result.Stdout, result.Stderr,
 	)
+	if err == nil {
+		metricExecutionDataBytes.WithLabelValues("stdout").Add(float64(len(result.Stdout)))
+		metricExecutionDataBytes.WithLabelValues("stderr").Add(float64(len(result.Stderr)))
+	}
 	return err
 }
 
