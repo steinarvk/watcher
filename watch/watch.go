@@ -182,7 +182,7 @@ func Watch(db *storage.DB, watch *config.WatchSpec, nodesStored chan<- string) e
 			}
 			backoff.Reset()
 
-			if err := db.InsertExecution(watch.Name, result, info); err != nil {
+			if _, err := db.InsertExecution(watch.Name, result, info, nil); err != nil {
 				return err
 			}
 			nodesStored <- watch.Name

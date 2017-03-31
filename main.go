@@ -192,7 +192,7 @@ func mainCore() error {
 		}
 
 		go func() {
-			err := analyse.Analyse(parentPath, path, analysisSpec, notifyChan, nodesStored)
+			err := analyse.Analyse(db, parentPath, path, analysisSpec, notifyChan, nodesStored)
 			if err != nil {
 				log.Fatal(fmt.Errorf("error with analyser %q: %v", path, err))
 			}

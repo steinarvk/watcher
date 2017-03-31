@@ -113,35 +113,78 @@ func (d *DB) wrappedExec(name, sql string, args ...interface{}) (sql.Result, err
 	return result, track.Finish(err)
 }
 
-func (d *DB) InsertExecution(path string, result *runner.Result, info *hostinfo.HostInfo) error {
+type ChildlessExecution struct {
+	Id     int64
+	Stdout string
+}
+
+func (d *DB) GetChildlessExecutions(parentPath, childPath string) ([]*ChildlessExecution, bool, error) {
+	limit := 100
+	track := beginTracking("get-childless-executions")
+	rows, err := d.DB.Query(`
+		SELECT execution_id, stdout
+		FROM program_executions AS p
+		WHERE p.node_path = $1
+		  AND p.success
+		  AND (SELECT COUNT(execution_id)
+		       FROM program_executions AS c
+		       WHERE c.parent_execution_id = p.execution_id
+					   AND c.node_path = $2) = 0
+		LIMIT $3
+	`, parentPath, childPath, limit)
+	if err != nil {
+		return nil, false, track.Finish(err)
+	}
+	var rv []*ChildlessExecution
+	for rows.Next() {
+		item := &ChildlessExecution{}
+		if err := rows.Scan(&item.Id, &item.Stdout); err != nil {
+			return nil, false, track.Finish(err)
+		}
+		rv = append(rv, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, false, track.Finish(err)
+	}
+	return rv, len(rv) == limit, nil
+}
+
+func (d *DB) InsertExecution(path string, result *runner.Result, info *hostinfo.HostInfo, parent *int64) (int64, error) {
 	if Verbose {
 		log.Printf("InsertExecution(%q, ...)", path)
 	}
-	_, err := d.wrappedExec("insert-execution", `
+	var executionId int64
+	track := beginTracking("insert-execution")
+	err := d.DB.QueryRow(`
 		INSERT INTO program_executions
 			(node_path,
 		   executor_host, executor_pid,
 			 started_utcmillis, stopped_utcmillis,
 			 success,
-			 stdout, stderr)
+			 stdout, stderr,
+		 	 parent_execution_id)
 			VALUES
 			($1,
 			 $2, $3,
 			 $4, $5,
 			 $6,
-			 $7, $8)
+			 $7, $8,
+		   $9)
+		  RETURNING execution_id
 	`,
 		path,
 		info.Hostname, info.Pid,
 		toUTCMillis(result.Start), toUTCMillis(result.Stop),
 		result.Success,
 		result.Stdout, result.Stderr,
-	)
+		parent,
+	).Scan(&executionId)
+	track.Finish(err)
 	if err == nil {
 		metricExecutionDataBytes.WithLabelValues("stdout").Add(float64(len(result.Stdout)))
 		metricExecutionDataBytes.WithLabelValues("stderr").Add(float64(len(result.Stderr)))
 	}
-	return err
+	return executionId, err
 }
 
 func (d *DB) CleanLeases(t time.Time) error {
