@@ -1,4 +1,5 @@
 *.swp
 /watcher
 /watcher-importer
+/watcher-exporter
 junk/

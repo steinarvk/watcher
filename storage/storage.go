@@ -5,6 +5,8 @@ import (
 	"log"
 	"time"
 
+	"go4.org/sort"
+
 	"github.com/lib/pq"
 	"github.com/steinarvk/watcher/hostinfo"
 	"github.com/steinarvk/watcher/runner"
@@ -107,6 +109,10 @@ func toUTCMillis(t time.Time) int64 {
 	return t.UnixNano() / int64(time.Millisecond)
 }
 
+func fromUTCMillis(t int64) time.Time {
+	return time.Unix(0, t*int64(time.Millisecond))
+}
+
 func (d *DB) wrappedExec(name, sql string, args ...interface{}) (sql.Result, error) {
 	track := beginTracking(name)
 	result, err := d.DB.Exec(sql, args...)
@@ -158,6 +164,56 @@ func (d *DB) getRootId(parent int64) (*int64, error) {
 		FROM program_executions
 		WHERE execution_id = $1
 	`, parent).Scan(&rv)
+	return rv, track.Finish(err)
+}
+
+type NodeRow struct {
+	Id       int64
+	RootTime time.Time
+	Result   runner.Result
+}
+
+func (d *DB) QueryExecutionResults(path string) ([]*NodeRow, error) {
+	var rv []*NodeRow
+	var err error
+
+	track := beginTracking("query-execution-results")
+	rows, err := d.DB.Query(`
+		SELECT n.execution_id, r.started_utcmillis, n.started_utcmillis, n.stopped_utcmillis, n.stdout, n.stderr, n.success
+		FROM program_executions AS n
+		LEFT OUTER JOIN program_executions AS r ON r.execution_id = n.root_execution_id
+		WHERE n.node_path = $1
+	`, path)
+	if err == nil {
+		for rows.Next() {
+			item := &NodeRow{}
+			var rootStartMillis *int64
+			var startMillis, stopMillis int64
+			err = rows.Scan(&item.Id, &rootStartMillis, &startMillis, &stopMillis, &item.Result.Stdout, &item.Result.Stderr, &item.Result.Success)
+			if err != nil {
+				break
+			}
+			item.Result.Start = fromUTCMillis(startMillis)
+			item.Result.Stop = fromUTCMillis(stopMillis)
+
+			if rootStartMillis != nil {
+				item.RootTime = fromUTCMillis(*rootStartMillis)
+			} else {
+				item.RootTime = item.Result.Start
+			}
+
+			rv = append(rv, item)
+		}
+
+		if err == nil {
+			err = rows.Err()
+		}
+	}
+
+	sort.Slice(rv, func(i, j int) bool {
+		return rv[i].RootTime.Before(rv[j].RootTime)
+	})
+
 	return rv, track.Finish(err)
 }
 
