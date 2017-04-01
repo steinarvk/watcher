@@ -149,7 +149,30 @@ func (d *DB) GetChildlessExecutions(parentPath, childPath string) ([]*ChildlessE
 	return rv, len(rv) == limit, nil
 }
 
+func (d *DB) getRootId(parent int64) (*int64, error) {
+	var rv *int64
+
+	track := beginTracking("get-root-execution-id")
+	err := d.DB.QueryRow(`
+		SELECT root_execution_id
+		FROM program_executions
+		WHERE execution_id = $1
+	`, parent).Scan(&rv)
+	return rv, track.Finish(err)
+}
+
 func (d *DB) InsertExecution(path string, result *runner.Result, info *hostinfo.HostInfo, parent *int64) (int64, error) {
+	var rootId *int64
+	if parent != nil {
+		id, err := d.getRootId(*parent)
+		if err != nil {
+			return 0, err
+		}
+		if id == nil {
+			rootId = parent
+		}
+	}
+
 	if Verbose {
 		log.Printf("InsertExecution(%q, ...)", path)
 	}
@@ -162,14 +185,16 @@ func (d *DB) InsertExecution(path string, result *runner.Result, info *hostinfo.
 			 started_utcmillis, stopped_utcmillis,
 			 success,
 			 stdout, stderr,
-		 	 parent_execution_id)
+			 parent_execution_id,
+		   root_execution_id)
 			VALUES
 			($1,
 			 $2, $3,
 			 $4, $5,
 			 $6,
 			 $7, $8,
-		   $9)
+		   $9,
+		   $10)
 		  RETURNING execution_id
 	`,
 		path,
@@ -178,6 +203,7 @@ func (d *DB) InsertExecution(path string, result *runner.Result, info *hostinfo.
 		result.Success,
 		result.Stdout, result.Stderr,
 		parent,
+		rootId,
 	).Scan(&executionId)
 	track.Finish(err)
 	if err == nil {
