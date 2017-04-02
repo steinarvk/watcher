@@ -18,9 +18,24 @@ type ProgramSpec struct {
 func (p *ProgramSpec) Program() string { return p.Binary }
 func (p *ProgramSpec) Args() []string  { return p.Arguments }
 
+func whichFile(path string) (bool, error) {
+	whichSpec := &ProgramSpec{
+		Binary:    "which",
+		Arguments: []string{path},
+	}
+
+	whichRes, err := Run(whichSpec, WithTimeout(time.Second))
+	if err != nil {
+		return false, err
+	}
+
+	return whichRes.Success, nil
+}
+
 type Config struct {
 	Shell   string       `yaml:"shell"`
 	Program *ProgramSpec `yaml:"program"`
+	Python3 string       `yaml:"python3"`
 
 	Timeout string `yaml:"timeout"`
 }
@@ -45,6 +60,7 @@ func countTrue(xs ...bool) int {
 func (c *Config) ToSpec() (Spec, error) {
 	n := countTrue(
 		c.Shell != "",
+		c.Python3 != "",
 		c.Program != nil,
 	)
 	if n == 0 {
@@ -58,6 +74,9 @@ func (c *Config) ToSpec() (Spec, error) {
 	case c.Shell != "":
 		return ShellCommand(c.Shell), nil
 
+	case c.Python3 != "":
+		return Python3Command(c.Python3), nil
+
 	case c.Program != nil:
 		return c.Program, nil
 
@@ -67,6 +86,13 @@ func (c *Config) ToSpec() (Spec, error) {
 }
 
 func (c *Config) Check() error {
-	_, err := c.ToSpec()
-	return err
+	spec, err := c.ToSpec()
+	if err != nil {
+		return err
+	}
+	ok, err := whichFile(spec.Program())
+	if err != nil || !ok {
+		return fmt.Errorf("will be unable to execute command (%v): which(%q) = %v (err: %v)", c, spec.Program(), ok, err)
+	}
+	return nil
 }
