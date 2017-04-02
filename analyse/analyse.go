@@ -101,6 +101,9 @@ var (
 func init() {
 	prometheus.MustRegister(metricAnalysersStarted)
 	prometheus.MustRegister(metricNodeStoredHintsReceived)
+	prometheus.MustRegister(metricAnalyseRuns)
+	prometheus.MustRegister(metricAnalyseRunsFinished)
+	prometheus.MustRegister(metricAnalyseRunLatency)
 }
 
 func Analyse(db *storage.DB, parentPath, path string, spec *config.AnalysisSpec, notify <-chan struct{}, nodesStored chan<- string) error {
@@ -161,6 +164,8 @@ func Analyse(db *storage.DB, parentPath, path string, spec *config.AnalysisSpec,
 
 		for _, item := range items {
 			err := db.WithLease(fmt.Sprintf("analyse:%s:%d", path, item.Id), runTimeout+time.Second, func() error {
+				log.Printf("running analysis %q", path)
+
 				track := beginTracking(path)
 				result, err := runner.Run(runSpec, runner.WithTimeout(runTimeout), runner.WithInput(item.Stdout))
 				track.Finish(err)
