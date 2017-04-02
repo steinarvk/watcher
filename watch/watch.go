@@ -27,6 +27,15 @@ var (
 		[]string{"watcher"},
 	)
 
+	metricWatchNextScheduledRun = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: "watcher",
+			Name:      "watch_next_scheduled_run",
+			Help:      "Timestamp (Unix seconds) of next scheduled run",
+		},
+		[]string{"name"},
+	)
+
 	metricWatchRuns = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: "watcher",
@@ -56,6 +65,7 @@ var (
 )
 
 func init() {
+	prometheus.MustRegister(metricWatchNextScheduledRun)
 	prometheus.MustRegister(metricWatchRuns)
 	prometheus.MustRegister(metricWatchRunsFinished)
 	prometheus.MustRegister(metricWatchRunLatency)
@@ -156,6 +166,8 @@ func Watch(db *storage.DB, watch *config.WatchSpec, nodesStored chan<- string) e
 			time.Sleep(time.Second)
 			continue
 		}
+
+		metricWatchNextScheduledRun.WithLabelValues(watch.Name).Set(float64(next.UnixNano()) / float64(time.Second))
 
 		if Verbose {
 			log.Printf("%q scheduled for %v", watch.Name, next)
