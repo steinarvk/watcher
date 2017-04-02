@@ -34,7 +34,7 @@ var (
 	configFilename    = flag.String("config", "", "config YAML file")
 	dbSecretsFilename = flag.String("db_secrets", "", "database secrets YAML file")
 	verboseLogging    = flag.Bool("verbose", false, "verbose logging")
-	listenAll         = flag.Bool("listen_all", false, "listen on all network interfaces, not only localhost")
+	listenHost        = flag.String("listen_host", "localhost", "listen on all network interfaces, not only localhost")
 	port              = flag.Int("port", 0, "port on which to listen")
 )
 
@@ -64,8 +64,8 @@ func init() {
 
 func beginListening() (net.Listener, error) {
 	host := "127.0.0.1"
-	if *listenAll {
-		host = ""
+	if *listenHost != "localhost" {
+		host = *listenHost
 	}
 
 	if *port != 0 {
