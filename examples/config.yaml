@@ -41,3 +41,9 @@ watch:
         run:
           program:
             binary: "./examples/scripts/mefi_comment_count.py"
+        analyse:
+          - name: popular_thread
+            run:
+              program:
+                binary: python3
+                args: ["-c", "import json; import sys; json.dump(max(json.load(sys.stdin).values()) > 100, sys.stdout)"]
