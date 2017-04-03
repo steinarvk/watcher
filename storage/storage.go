@@ -2,6 +2,7 @@ package storage
 
 import (
 	"database/sql"
+	"errors"
 	"log"
 	"time"
 
@@ -171,6 +172,16 @@ type NodeRow struct {
 	Id       int64
 	RootTime time.Time
 	Result   runner.Result
+}
+
+func (d *DB) GetLatestExecutionIfChildless(path, childPath string) (*NodeRow, error) {
+	// TODO
+	return nil, errors.New("GetLatestExecutionIfChildless: not implemented yet")
+}
+
+func (d *DB) GetTimeOfLatestSuccessfulExecution(path string) (time.Time, error) {
+	// TODO
+	return time.Time{}, errors.New("GetTimeOfLastSuccessfulExecution: not implemented yet")
 }
 
 func (d *DB) QueryExecutionResults(path string) ([]*NodeRow, error) {

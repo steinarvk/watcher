@@ -16,6 +16,7 @@ import (
 	"github.com/steinarvk/watcher/config"
 	"github.com/steinarvk/watcher/secrets"
 	"github.com/steinarvk/watcher/storage"
+	"github.com/steinarvk/watcher/trigger"
 	"github.com/steinarvk/watcher/watch"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -179,6 +180,21 @@ func mainCore() error {
 
 	var startAnalyser func(string, *config.AnalysisSpec) error
 
+	startTrigger := func(parentPath string, triggerSpec *config.TriggerSpec) error {
+		notifyChan := make(chan struct{}, 100)
+		analyserChans[parentPath] = append(analyserChans[parentPath], notifyChan)
+		path := parentPath + "/" + triggerSpec.Name
+
+		go func() {
+			err := trigger.TriggerWorker(db, parentPath, path, triggerSpec, notifyChan, nodesStored)
+			if err != nil {
+				log.Fatal(fmt.Errorf("error with trigger %q: %v", path, err))
+			}
+		}()
+
+		return nil
+	}
+
 	startAnalyser = func(parentPath string, analysisSpec *config.AnalysisSpec) error {
 		notifyChan := make(chan struct{}, 100)
 
@@ -187,6 +203,12 @@ func mainCore() error {
 		path := parentPath + "/" + analysisSpec.Name
 		for _, ch := range analysisSpec.Children {
 			if err := startAnalyser(path, ch); err != nil {
+				return err
+			}
+		}
+
+		for _, ch := range analysisSpec.Triggers {
+			if err := startTrigger(path, ch); err != nil {
 				return err
 			}
 		}
