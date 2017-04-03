@@ -145,20 +145,16 @@ func TriggerWorker(db *storage.DB, parentPath, path string, spec *config.Trigger
 		}
 	}()
 
-	skipDelay := true
-
 	for {
-		if !skipDelay {
-			select {
-			case <-notify:
-				metricNodeStoredHintsReceived.Inc()
-				if Verbose {
-					log.Printf("trigger-worker %q woke up: notified", path)
-				}
-			case <-timeout:
-				if Verbose {
-					log.Printf("trigger-worker %q woke up: timeout", path)
-				}
+		select {
+		case <-notify:
+			metricNodeStoredHintsReceived.Inc()
+			if Verbose {
+				log.Printf("trigger-worker %q woke up: notified", path)
+			}
+		case <-timeout:
+			if Verbose {
+				log.Printf("trigger-worker %q woke up: timeout", path)
 			}
 		}
 
@@ -174,21 +170,24 @@ func TriggerWorker(db *storage.DB, parentPath, path string, spec *config.Trigger
 			continue
 		}
 
-		log.Printf("would trigger %q: %q", path, triggerInput)
+		if Verbose {
+			log.Printf("would trigger %q: %q [item root time %q]", path, triggerInput, item.RootTime)
+		}
 
 		lastTrigger, err := db.GetTimeOfLatestSuccessfulExecution(path)
 		if err != nil {
 			return err
 		}
 
-		if !lastTrigger.IsZero() {
-			if dur := time.Since(lastTrigger); dur > triggerPeriod {
-				log.Printf("skipping trigger %q: only %v since last trigger (period %v)", path, dur, triggerPeriod)
+		if lastTrigger != nil {
+			if dur := time.Since(*lastTrigger); dur < triggerPeriod {
+				log.Printf("skipping trigger %q: only %v since last trigger (%v, period %v)", path, dur, *lastTrigger, triggerPeriod)
+				continue
 			}
 		}
 
 		err = db.WithLease(fmt.Sprintf("trigger:%s:%d", path, item.Id), runTimeout+time.Second, func() error {
-			log.Printf("running trigger %q: %q", path, triggerInput)
+			log.Printf("running trigger %q: [root time: %v] %q", path, item.RootTime, triggerInput)
 
 			track := beginTracking(path)
 			result, err := runner.Run(runSpec, runner.WithTimeout(runTimeout), runner.WithInput(triggerInput))

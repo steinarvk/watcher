@@ -2,7 +2,6 @@ package storage
 
 import (
 	"database/sql"
-	"errors"
 	"log"
 	"time"
 
@@ -99,6 +98,10 @@ func (q *queryTracker) Finish(err error) error {
 	metricQueriesFinished.With(labels).Inc()
 	metricQueryLatency.With(labels).Observe(durationSecs)
 
+	if err != nil && err != sql.ErrNoRows {
+		log.Printf("error (query %q): %v", q.name, err)
+	}
+
 	return err
 }
 
@@ -175,13 +178,64 @@ type NodeRow struct {
 }
 
 func (d *DB) GetLatestExecutionIfChildless(path, childPath string) (*NodeRow, error) {
-	// TODO
-	return nil, errors.New("GetLatestExecutionIfChildless: not implemented yet")
+	item := &NodeRow{}
+
+	var rootStartMillis *int64
+	var startMillis, stopMillis int64
+
+	track := beginTracking("get-latest-execution-if-childless")
+	err := d.DB.QueryRow(`
+		SELECT n.execution_id, r.started_utcmillis, n.started_utcmillis, n.stopped_utcmillis, n.stdout, n.stderr, n.success
+		FROM program_executions AS n
+		JOIN (SELECT nn.execution_id
+					FROM program_executions AS nn
+					LEFT OUTER JOIN program_executions AS rt ON rt.execution_id = nn.root_execution_id
+					WHERE nn.node_path = $1
+					ORDER BY rt.started_utcmillis DESC
+					LIMIT 1) as latest ON (latest.execution_id = n.execution_id)
+		LEFT OUTER JOIN program_executions AS r ON r.execution_id = n.root_execution_id
+		WHERE NOT EXISTS (SELECT execution_id FROM program_executions
+		                  WHERE node_path = $2 AND parent_execution_id = n.execution_id)
+	`, path, childPath).Scan(&item.Id, &rootStartMillis, &startMillis, &stopMillis, &item.Result.Stdout, &item.Result.Stderr, &item.Result.Success)
+	track.Finish(err)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	item.Result.Start = fromUTCMillis(startMillis)
+	item.Result.Stop = fromUTCMillis(stopMillis)
+
+	if rootStartMillis != nil {
+		item.RootTime = fromUTCMillis(*rootStartMillis)
+	} else {
+		item.RootTime = item.Result.Start
+	}
+
+	return item, nil
 }
 
-func (d *DB) GetTimeOfLatestSuccessfulExecution(path string) (time.Time, error) {
-	// TODO
-	return time.Time{}, errors.New("GetTimeOfLastSuccessfulExecution: not implemented yet")
+func (d *DB) GetTimeOfLatestSuccessfulExecution(path string) (*time.Time, error) {
+	var timeMillis int64
+
+	track := beginTracking("get-time-of-latest-successful-execution")
+	err := d.DB.QueryRow(`
+		SELECT started_utcmillis
+		FROM program_executions
+		WHERE node_path = $1
+		  AND success
+		ORDER BY started_utcmillis DESC
+		LIMIT 1
+	`, path).Scan(&timeMillis)
+	track.Finish(err)
+
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	rv := fromUTCMillis(timeMillis)
+	return &rv, nil
 }
 
 func (d *DB) QueryExecutionResults(path string) ([]*NodeRow, error) {
@@ -237,6 +291,8 @@ func (d *DB) InsertExecution(path string, result *runner.Result, info *hostinfo.
 		}
 		if id == nil {
 			rootId = parent
+		} else {
+			rootId = id
 		}
 	}
 

@@ -42,6 +42,11 @@ watch:
           program:
             binary: "./examples/scripts/mefi_comment_count.py"
         analyse:
-          - name: popular_thread
+          - name: popular_threads
             run:
-              python3: "json.dump(max(json.load(sys.stdin).values()) > 100, sys.stdout)"
+              python3: "rv = {k: n for k, n in json.load(sys.stdin).items() if n > 100}; print(rv) if rv else None"
+            triggers:
+              - name: popular_fpps_trigger
+                period: 8h
+                run:
+                  shell: "cat >> /tmp/watcher-trigger-example-mefi-popular-fpps.generated.txt"
