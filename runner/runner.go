@@ -47,6 +47,7 @@ func WithInput(s string) Option {
 type Spec interface {
 	Program() string
 	Args() []string
+	ShouldRun() bool
 }
 
 func Run(spec Spec, opts ...Option) (*Result, error) {

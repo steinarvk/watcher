@@ -12,3 +12,4 @@ func (s Python3Command) Program() string { return python3Name }
 func (s Python3Command) Args() []string {
 	return []string{"-c", standardPythonPrelude + string(s)}
 }
+func (p Python3Command) ShouldRun() bool { return true }

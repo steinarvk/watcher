@@ -17,6 +17,13 @@ type ProgramSpec struct {
 
 func (p *ProgramSpec) Program() string { return p.Binary }
 func (p *ProgramSpec) Args() []string  { return p.Arguments }
+func (p *ProgramSpec) ShouldRun() bool { return true }
+
+type DoNotRunSpec struct{}
+
+func (p *DoNotRunSpec) Program() string { return "/bin/true" }
+func (p *DoNotRunSpec) Args() []string  { return nil }
+func (p *DoNotRunSpec) ShouldRun() bool { return false }
 
 func whichFile(path string) (bool, error) {
 	whichSpec := &ProgramSpec{
@@ -33,9 +40,10 @@ func whichFile(path string) (bool, error) {
 }
 
 type Config struct {
-	Shell   string       `yaml:"shell"`
-	Program *ProgramSpec `yaml:"program"`
-	Python3 string       `yaml:"python3"`
+	Shell    string       `yaml:"shell"`
+	Program  *ProgramSpec `yaml:"program"`
+	Python3  string       `yaml:"python3"`
+	DoNotRun bool         `yaml:"do-not-run"`
 
 	Timeout string `yaml:"timeout"`
 }
@@ -62,6 +70,7 @@ func (c *Config) ToSpec() (Spec, error) {
 		c.Shell != "",
 		c.Python3 != "",
 		c.Program != nil,
+		c.DoNotRun,
 	)
 	if n == 0 {
 		return nil, errors.New("empty runner config")
@@ -79,6 +88,9 @@ func (c *Config) ToSpec() (Spec, error) {
 
 	case c.Program != nil:
 		return c.Program, nil
+
+	case c.DoNotRun:
+		return &DoNotRunSpec{}, nil
 
 	default:
 		return nil, fmt.Errorf("internal error handling runner config: %v", c)

@@ -8,3 +8,4 @@ const (
 
 func (s ShellCommand) Program() string { return shellName }
 func (s ShellCommand) Args() []string  { return []string{"-c", string(s)} }
+func (p ShellCommand) ShouldRun() bool { return true }

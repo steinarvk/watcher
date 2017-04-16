@@ -125,6 +125,10 @@ func Watch(db *storage.DB, watch *config.WatchSpec, nodesStored chan<- string) e
 	if err != nil {
 		return err
 	}
+	if !runSpec.ShouldRun() {
+		log.Printf("stopping watcher for node %q: do-not-run", watch.Name)
+		return nil
+	}
 
 	timeout, err := watch.Run.GetTimeout()
 	if err != nil {

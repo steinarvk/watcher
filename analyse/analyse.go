@@ -1,6 +1,7 @@
 package analyse
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"time"
@@ -119,6 +120,10 @@ func Analyse(db *storage.DB, parentPath, path string, spec *config.AnalysisSpec,
 	runSpec, err := spec.Run.ToSpec()
 	if err != nil {
 		return err
+	}
+
+	if !runSpec.ShouldRun() {
+		return errors.New("do-not-run for analyser makes no sense")
 	}
 
 	runTimeout, err := spec.Run.GetTimeout()

@@ -1,6 +1,7 @@
 package trigger
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"strings"
@@ -125,6 +126,10 @@ func TriggerWorker(db *storage.DB, parentPath, path string, spec *config.Trigger
 	runSpec, err := spec.Run.ToSpec()
 	if err != nil {
 		return err
+	}
+
+	if !runSpec.ShouldRun() {
+		return errors.New("do-not-run for trigger makes no sense")
 	}
 
 	runTimeout, err := spec.Run.GetTimeout()

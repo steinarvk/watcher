@@ -22,6 +22,11 @@ watch:
       shell: "date +%s"
     schedule:
       period: 5s
+  - name: trivialNode
+    run:
+      do-not-run: true
+    schedule:
+      period: 5s
   - name: sleep5s
     run:
       shell: "sleep 5s"
