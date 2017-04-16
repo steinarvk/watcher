@@ -1,5 +1,6 @@
 *.swp
 /watcher
 /watcher-importer
+/watcher-importer-server
 /watcher-exporter
 junk/
