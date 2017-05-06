@@ -20,6 +20,7 @@ var (
 	showFailures      = flag.Bool("show_failures", false, "show output of failed commands")
 	changesOnly       = flag.Bool("changes_only", false, "only show changes")
 	trimValues        = flag.Bool("trim_shown_values", true, "trim spaces from beginning and end of shown values")
+	humanReadable     = flag.Bool("human_readable", false, "format timestamps for human-readability")
 )
 
 type DatabaseSecrets struct {
@@ -93,9 +94,12 @@ func mainCore() error {
 			lastValue = &showValue
 		}
 
-		ms := row.RootTime.UnixNano() / int64(time.Millisecond)
-
-		fmt.Printf("%v\t%s\n", ms, showValue)
+		if *humanReadable {
+			fmt.Printf("%s\t%s\n", row.RootTime.Format(time.RFC3339), showValue)
+		} else {
+			ms := row.RootTime.UnixNano() / int64(time.Millisecond)
+			fmt.Printf("%v\t%s\n", ms, showValue)
+		}
 	}
 
 	return nil
